@@ -21,10 +21,10 @@ this repository or reach out so we can collaborate!
 
 Some disclaimers and notes:
 - The code is still a work in progress. Some features have not been added, completed, or updated yet.
-- I currently do not have access to real EHR schemas and structures yet, so the way the data is linked from
-  the synthetic data files to the analysis files may not be accurate to how real data would be linked.
+- I currently do not have access to real EHR schemas yet, so the way the data is joined from synthetic data files to
+  the analysis files may not be fully applicable on real data structures.
 - The analysis variables are not final and are subject to change depending on availability and relevance.
 - File 05.5.R is currently outdated and broken but it is only an optional side-analysis and will be updated later.
 - The code is currently designed for a two-dataset study, but can be easily modified to accommodate
   a single-dataset analysis.
-- The numbers in the .R file names signify the order in the pipeline.
+- The numbers in the .R file names usually signify the order in the pipeline.
