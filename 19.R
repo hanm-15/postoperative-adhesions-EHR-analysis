@@ -4,11 +4,11 @@ library(ggplot2)
 library(lme4)
 library(lmerTest)
 
-message("\n--- STARTING SECTION 5.3: CROSS-COHORT PARAMETER VALIDATION ---")
+message("\n--- SECTION 5.3: CROSS-COHORT VALIDATION ---")
 
 # 1. Helper function to extract Raw Means and 95% CIs per incoming_class
 extract_incoming_class_parameters <- function(data, scores, vars, cohort_label) {
-  # We join the RAW data (data) with the incoming_class assignments (scores)
+  # Join the RAW data (data) with the incoming_class assignments (scores)
   data %>%
     inner_join(scores %>% select(!!sym(ENCOUNTER_ID_VAR), incoming_class), by = ENCOUNTER_ID_VAR) %>%
     select(incoming_class, all_of(vars)) %>%
@@ -46,7 +46,7 @@ comparison_audit <- bind_rows(params_orig, params_ext) %>%
     )
   )
 
-# 4. Visualization (NOW WITH EXPLICIT PRINT)
+# 4. Visualization
 p_param_overlap <- ggplot(bind_rows(params_orig, params_ext), aes(x = cohort, y = mean_val, color = cohort)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.3, size = 1) +
@@ -60,7 +60,6 @@ p_param_overlap <- ggplot(bind_rows(params_orig, params_ext), aes(x = cohort, y 
 print(p_param_overlap) # <--- Fixed: Explicit print for the script execution
 
 # --- 5. Summary Reporting (FIXED) ---
-# Use na.rm = TRUE to ensure one missing marker doesn't kill the whole calculation
 success_rate <- mean(comparison_audit$overlap_success == "SUCCESS", na.rm = TRUE) * 100
 message(paste0("Parameter Overlap Success Rate: ", round(success_rate, 1), "%"))
 
@@ -81,9 +80,7 @@ if(!is.na(success_rate) && success_rate >= 80) {
 
 message("\n--- STARTING SECTION 5.4: EXTERNAL FINGERPRINT & DRIFT VALIDATION ---")
 
-# ==============================================================================
-# PART 1: EXTERNAL STATIC PROFILES (ACUTE LENS)
-# ==============================================================================
+# PART 1: Static physiological profiles
 
 # 1. Bridge External Raw Data with External Acute Class assignments
 static_analysis_ext <- lta_ext_copy %>%
@@ -96,7 +93,7 @@ static_analysis_ext <- lta_ext_copy %>%
   filter(node_label %in% c("lysis_confirm", "intraperitoneal_confirm")) %>%
   filter(!is.na(outgoing_class))
 
-# 2. Calculate Medians/IQR (External Fingerprint)
+# 2. Calculate Medians/IQR
 static_summary_ext <- static_analysis_ext %>%
   group_by(outgoing_class) %>%
   summarise(across(all_of(c(chronic_vars_final, acute_vars_final)), list(
@@ -126,9 +123,7 @@ p_ext_fingerprint <- ggplot(plot_ext_fingerprint, aes(x = outgoing_class, y = me
 print(p_ext_fingerprint)
 
 
-# ==============================================================================
-# PART 2: EXTERNAL DRIFT VELOCITY (FULL ADJUSTED ENGINE)
-# ==============================================================================
+# PART 2: External cohort drift analysis
 drift_data_ext <- final_lta_analysis_ext %>%
   group_by(!!sym(PATIENT_ID_VAR)) %>%
   arrange(node_sequence) %>%
@@ -140,8 +135,7 @@ drift_data_ext <- final_lta_analysis_ext %>%
   filter(!is.na(directionality)) %>%
   ungroup()
 
-# MANUALLY DEFINED COVARIATES (No umbrella catch)
-# We exclude 'months_since_index' here because it is in the interaction term
+# Defined covariates
 ext_cov_list <- c(
   "cov_age", "cov_bmi", "cov_asa", "cov_systemic_trauma", "cov_diabetes",
   "cov_ckd", "cov_gender", "cov_last_approach", "cov_local_trauma", "cov_last_urgency")
@@ -152,12 +146,11 @@ valid_transitions_ext <- drift_data_ext %>%
   filter(!is.na(directionality), n >= 5) %>%
   pull(directionality)
 
-# 2. Automated LME Engine (Matching the 'Refined Drift' Logic)
+# 2. Automated LME Engine
 drift_results_ext <- map_df(chronic_vars_final, ~{
   message("Modeling Drift for: ", .x)
   
   # Filter for valid transitions and drop NAs for this specific marker
-  # Note: we use ext_cov_list which you generated from the '^cov_' string subset
   analysis_df <- drift_data_ext %>%
     filter(directionality %in% valid_transitions_ext) %>%
     drop_na(all_of(c(.x, "months_since_index", ext_cov_list)))
@@ -165,8 +158,6 @@ drift_results_ext <- map_df(chronic_vars_final, ~{
   if(nrow(analysis_df) < 30) return(NULL)
   
   # Formula logic: 
-  # We try (1 + months_since_index | ID) first (Random Slope)
-  # If it fails, we fall back to (1 | ID) (Random Intercept)
   formula_str <- paste0(
     .x, " ~ months_since_index * directionality + ", 
     paste(ext_cov_list, collapse = " + "), 
@@ -190,13 +181,10 @@ drift_results_ext <- map_df(chronic_vars_final, ~{
   }
 })
 
-# ==============================================================================
-# PART 3: THE VALIDATION CORRELATION (SECTION 5.4 CRITERIA)
-# ==============================================================================
 
+# PART 3: Report on directional consistency across cohorts
 message("\n--- CROSS-COHORT DIRECTIONAL CONSISTENCY ---")
 
-# Here we compare the Estimates from original drift results vs external
 if(exists("drift_results_full")) {
   validation_compare <- drift_results_ext %>%
     select(variable, term, Estimate_Ext = Estimate, p_ext = `Pr(>|t|)`) %>%
@@ -204,12 +192,11 @@ if(exists("drift_results_full")) {
                  select(variable, term, Estimate_Orig = Estimate), 
                by = c("variable", "term")) %>%
     mutate(
-      # ONLY REPLACE THE STRING HERE
       term = str_replace(term, "months_since_index:directionality", "Velocity: "),
       consistent = sign(Estimate_Ext) == sign(Estimate_Orig)
     )
   
-  # Print as a data frame to prevent the tibble from hiding columns
+  # Print as a data frame
   print(as.data.frame(validation_compare))
   
   success_count <- sum(validation_compare$consistent & validation_compare$p_ext < 0.05, na.rm = TRUE)
@@ -217,10 +204,8 @@ if(exists("drift_results_full")) {
 }
 
 
-# ==============================================================================
-# PART 4: EXTERNAL DRIFT VISUALIZATION (FOREST PLOT)
-# ==============================================================================
-message("\n--- GENERATING EXTERNAL VELOCITY FOREST PLOT ---")
+# PART 4: External cohort physiological drift visualization
+message("\n--- GENERATING FOREST PLOT ---")
 
 if(nrow(drift_results_ext) > 0) {
   drift_plot_ext <- drift_results_ext %>%
@@ -247,9 +232,7 @@ if(nrow(drift_results_ext) > 0) {
   print(p_velocity_ext)
 }
 
-# ==============================================================================
-# PART 5: EXTERNAL TRANSITION PROBABILITY MATRIX
-# ==============================================================================
+# PART 5: Transition probability matrix
 message("\n--- GENERATING EXTERNAL TRANSITION PROBABILITY MATRIX ---")
 
 transition_matrix_ext <- drift_data_ext %>%
@@ -265,9 +248,7 @@ transition_matrix_ext <- drift_data_ext %>%
 
 print(transition_matrix_ext)
 
-# ==============================================================================
-# PART 6: FINAL VALIDATION LOG (The "Never Worry Again" Summary)
-# ==============================================================================
+# PART 6: Validation summary
 message("\n--- FINAL EXTERNAL VALIDATION SUMMARY ---")
 message("1. Static Fingerprint: ", nrow(static_summary_ext), " classes profiled.")
 message("2. Drift Analysis: ", length(unique(drift_results_ext$variable)), " markers modeled.")
