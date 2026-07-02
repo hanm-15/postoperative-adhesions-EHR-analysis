@@ -16,7 +16,8 @@ tidyLPA, and tidyverse.
 
 If you have any suggestions, concerns, or would like to know more about the specifics of the methodology,
 I can be contacted at [nguyen.minh201023@gmail.com]. The project is currently being managed and developed individually,
-but I am highly open to collaboration.
+but I am highly open to collaboration. If you plan to use this pipeline or adapt it to your own research, please credit
+this repository or reach out so we can collaborate!
 
 Some disclaimers and notes:
 - The code is still a work in progress. Some features have not been added, completed, or updated yet.
