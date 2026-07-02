@@ -23,6 +23,9 @@ Some disclaimers and notes:
 - The code is still a work in progress. Some features have not been added, completed, or updated yet.
 - I currently do not have access to real EHR schemas yet, so the way the data is joined from synthetic data files to
   the analysis files may not be fully applicable on real data structures.
+- Since the code is built based on synthetic data files, I added code to omit or ignore NA values at some
+  parts to ignore missing values that weren't included in the data generation. To add features like imputation methods,
+  these parts must first be changed.
 - The analysis variables are not final and are subject to change depending on availability and relevance.
 - File 05.5.R is currently outdated and broken but it is only an optional side-analysis and will be updated later.
 - The code is currently designed for a two-dataset study, but can be easily modified to accommodate
